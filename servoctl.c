@@ -8,10 +8,11 @@ volatile int8 T3state;
 volatile uint8 T3counter;
 volatile uint8 T3LastPos;
 extern volatile uint8 ServoPos;
-extern SingleServo Servos;
+extern SingleServo Servos[];
 
 void do_T3(void) {
 	++T3count;
+	P0DIR|=1;
 	switch(T3state) {
 		case 0: // Always-on finished, so now we set the on-time for the servo
 			// Set T3CCR to ServoPos
@@ -20,6 +21,7 @@ void do_T3(void) {
 			if (T3LastPos < 5) T3LastPos = 5;
 			T3CC0 = T3LastPos;
 			// Now in state 1
+			P0_0=(1);
 			LED_YELLOW(1);
 			T3state=1;
 			break;
@@ -27,6 +29,7 @@ void do_T3(void) {
 			// T3CCR 
 			T3CC0 = 255 - T3LastPos;
 			LED_YELLOW(0);
+			P0_0=(0);
 			T3state=2;
 			break;
 		case 2: // Delaying after Servo.  Now we wait the other 17.8 ms.
@@ -38,6 +41,7 @@ void do_T3(void) {
 				T3counter=0;
 				T3CC0 = 169;
 				LED_YELLOW(1);
+				P0_0=(1);
 			}
 			break;
 	}
@@ -46,6 +50,13 @@ void do_T3(void) {
 
 // Initialization routines
 void InitServos(void) {
+	T3CC0=169;
+	T3IE=1;
+    // DIV=   111: 1:128 prescaler
+    // START=    1: Start the timer
+    // OVFIM=     1: Enable the overflow interrupt.
+    // MODE=        10: Modulo
+	T3CTL = 0b11111010;	
 }
 
 void SetPin(unsigned char servono, unsigned char pin) {
