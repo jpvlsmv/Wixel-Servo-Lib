@@ -14,7 +14,7 @@
  * (Timer4 is used by time.h)
  * 
  * Basic use:
- * 		#define MAXSERVOS
+ * 		#define NUMSERVOS
  * 		#include servoctl.h
  * 		Call InitServos() to set up
  * 		Tell the library where the servos are connected with SetPin()
@@ -25,31 +25,35 @@
 #ifndef SERVOCTL_H_
 #define SERVOCTL_H_
 
-#define MAXSERVOS(x) 	const unsigned char MAXSERVOS = x; SingleServo Servos[x]; \
+#define NUMSERVOS(x) 	DATA const unsigned char NUMSERVOS = x; SingleServo Servos[x]; \
 						extern void do_T3(void); ISR(T3,1){do_T3();}
+						
+#define SERVO_NOPOS 255
 
 typedef struct {
-	unsigned char pin;		// What I/O pin this servo is connected to
-	unsigned char position;	// Next position the servo should be
-	unsigned char lastpos;	// Where the servo is moving to (do not use, maintained by the interrupt handler
+	volatile uint8 port;
+	volatile uint8 pin;		// GPIO port to use
+	volatile uint8 position;	// Next position the servo should be
+	uint8 lastpos;	// Where the servo is moving to (do not use, maintained by the interrupt handler
 } SingleServo;
 
-extern const unsigned char MAXSERVOS;
+extern DATA const uint8 NUMSERVOS;
 extern SingleServo Servos[];	// Global servo variable
 
 //------------------------------------
 // Initialization routines
 void InitServos(void);			// Set up the timer and initialize data structures, but do not start
 								// outputting the PWM until positions are set.
-void SetPin(unsigned char servono, unsigned char pin);
+void SetPin(uint8 servono, uint8 port, uint8 pin);
 								// Associate a servo number to a GPIO pin.  Pass in P0_0 for example.
 
 //------------------------------------
 // General servo movement functions
-void SetPos(unsigned char servono, unsigned char pos);
+void SetPos(uint8 servono, uint8 pos);
 								// Tell servo to move to a particular location
+								// Setting the position to SERVO_NOPOS will disable the servo channel.
 								// Note that until the first time this is called, no PWM will go to any servo.
-void GetPos(unsigned char servono);
+uint8 GetPos(uint8 servono);
 								// Return the last SetPos.  This does not query the servo for position.
 
 #endif /*SERVOCTL_H_*/
