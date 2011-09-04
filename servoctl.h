@@ -25,6 +25,7 @@
 #ifndef SERVOCTL_H_
 #define SERVOCTL_H_
 
+
 #define NUMSERVOS(x) 	DATA const unsigned char NUMSERVOS = x; SingleServo Servos[x]; \
 						extern void do_T3(void); ISR(T3,1){do_T3();}
 						
@@ -34,7 +35,7 @@ typedef struct {
 	volatile uint8 port;
 	volatile uint8 pin;		// GPIO port to use
 	volatile uint8 position;	// Next position the servo should be
-	uint8 lastpos;	// Where the servo is moving to (do not use, maintained by the interrupt handler
+	uint8 ticksremaining;	// Where the servo is moving to (do not use, maintained by the interrupt handler
 } SingleServo;
 
 extern DATA const uint8 NUMSERVOS;

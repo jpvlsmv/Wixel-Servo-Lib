@@ -5,7 +5,7 @@
 #include "servoctl.h"
 NUMSERVOS(3)
 
-int32 CODE param_speed = 10;
+int32 CODE param_speed = 70;
 int32 CODE param_port = 0;
 int32 CODE param_pin = 0;
 
@@ -24,7 +24,7 @@ void main(void) {
 
 	SetPin(0, port, pin);
 	SetPin(1, 0, 1);
-	SetPin(2, 0, 2);
+	SetPin(2, 0, 3);
 
 	while (1) {
 		delayMs(speed);
@@ -40,7 +40,8 @@ void main(void) {
 			dir ^=1;
 		}
 		SetPos(0,ServoPos);
-		SetPos(1,128);
-		SetPos(2,220);
+		SetPos(1,64);
+		SetPos(2,128);
+		LED_YELLOW(0);
 	}
 }

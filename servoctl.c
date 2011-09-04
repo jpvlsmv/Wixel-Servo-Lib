@@ -4,8 +4,12 @@
 
 #include <board.h>
 
-volatile uint8 T3counter;
-volatile uint8 LastServoPos=0;
+// Clear Timer3 so that it starts counting down again
+#define T3SET(x) T3CC0=(x); T3CTL |= 0b00000100;		
+
+
+volatile DATA uint8 T3counter;
+volatile DATA uint8 HighServoPos=0;
 	
 extern SingleServo Servos[];
 
@@ -17,33 +21,36 @@ extern SingleServo Servos[];
  * Then the rest of the 1.2ms to take us to a total of 2.1ms into the overall cycle (ALWAYSLOW)
  * Until we have counted 16 full time cycles, which is 19ms-ish for the overall cycle
  */
-enum ServoTimerState { ALWAYSHIGH, TICKINGHIGH, ALWAYSLOW } ServoTimerState;
+register enum ServoTimerState { ALWAYSHIGH, TICKINGHIGH, ALWAYSLOW } ServoTimerState;
 
 void T3_AlwaysHigh(void) {	// The signal has been high for 0.9ms
-	register uint8 j, FirstServoPos = SERVO_NOPOS ;
+	register uint8 j, FirstServoPos;
+	FirstServoPos = SERVO_NOPOS ;
 	
 	// We need to find the next servo to move to.
 	for (j=0;j<NUMSERVOS;++j) {
-		if ( (Servos[j].lastpos != SERVO_NOPOS) && (Servos[j].lastpos < FirstServoPos) ) {
-			FirstServoPos = Servos[j].lastpos;
+		if ( (Servos[j].ticksremaining != SERVO_NOPOS) && (Servos[j].ticksremaining < FirstServoPos) ) {
+			FirstServoPos = Servos[j].ticksremaining;
 		}
 	}
 	
 	// At this point, FirstServoPos is the smallest servo position.
 	if (FirstServoPos == SERVO_NOPOS) {		// No servos have had positions set yet.
 		ServoTimerState=TICKINGHIGH;
+		HighServoPos=255;
+		T3SET(255);
 		return; 
 	}
 	
 	// We'll set the timer to the smallest servo position, then modify
 	// all the other servos to hold the relative positions
 	for (j=0; j<NUMSERVOS;++j) {
-		if ((Servos[j].lastpos!=0) && (Servos[j].lastpos != SERVO_NOPOS)) 
-			Servos[j].lastpos -= FirstServoPos;
+		if ((Servos[j].ticksremaining!=0) && (Servos[j].ticksremaining != SERVO_NOPOS)) 
+			Servos[j].ticksremaining -= FirstServoPos;
 	}
 
-	T3CC0 = FirstServoPos;
 	ServoTimerState=TICKINGHIGH;
+	T3SET(FirstServoPos);
 }
 
 void T3_TickingHigh(void) {
@@ -52,73 +59,78 @@ void T3_TickingHigh(void) {
 		
 	for (j=0; j<NUMSERVOS;++j) {
 		pinmask = ~(1 << Servos[j].pin);
-		// Clear the pins for all servos that have lastpos == 0
-		if (Servos[j].lastpos == 0) { // Then this one's time has past.  Lower it
+		// Clear the pins for all servos that have ticksremaining == 0
+		if (Servos[j].ticksremaining == 0) { // Then this one's time has past.  Lower it
 			switch (Servos[j].port) {
 				case 0: P0 &= pinmask; break;
 				case 1: P1 &= pinmask; break;
 				case 2: P2 &= pinmask; break;
 			}
 		}
-		// And find the minimum non-zero lastpos
-		else if ( Servos[j].lastpos < NextServoPos ) {
-			NextServoPos = Servos[j].lastpos;
+		// And find the minimum non-zero ticksremaining
+		else if ( Servos[j].ticksremaining < NextServoPos ) {
+			NextServoPos = Servos[j].ticksremaining;
 		}
 	}
 	
 	if (NextServoPos == SERVO_NOPOS) {
 		// Then there are no more servos to activate.  Kill the rest of the variable-time
-		T3CC0 = 255 - LastServoPos;
 		T3counter = 0;
 		ServoTimerState=ALWAYSLOW;
+		T3SET(255-HighServoPos);		
 		return;
 	}
 	
 	// At least one more servo has time left
 	for (j=0; j<NUMSERVOS;++j) {
 		// Loop through and re-relativize the remaining posistions
-		if ((Servos[j].lastpos!=0) && (Servos[j].lastpos != SERVO_NOPOS)) 
-			Servos[j].lastpos -= NextServoPos;
+		if ((Servos[j].ticksremaining!=0) && (Servos[j].ticksremaining != SERVO_NOPOS)) 
+			Servos[j].ticksremaining -= NextServoPos;
 	}
-	if (NextServoPos < 10) NextServoPos = 10;
 	
-	T3CC0 = NextServoPos;
 	ServoTimerState = TICKINGHIGH;
+	T3SET(NextServoPos);		
 }
 
 void T3_AlwaysLow(void) {
-	register uint8 j;
+	register uint8 j, pinmask;
 
 	if (T3counter < 16) {
-		T3CC0 = 209; // 1ms
 		++T3counter;
+		T3SET(209);		
+		
 	} else {
 
 		// Here we reset the state of the servo systems data structure
-		LastServoPos = 0;
+		HighServoPos = 0;
 		for (j=0;j<NUMSERVOS;++j) {
-			Servos[j].lastpos = Servos[j].position; // Store the position (relatively atomically)
+			Servos[j].ticksremaining = Servos[j].position; // Store the position (relatively atomically)
 
-			// Do nothing else if the servo's not positioned
-			if (Servos[j].lastpos == SERVO_NOPOS) continue;
-			
-			if (Servos[j].lastpos > LastServoPos) { // This is the highest of all servo positions
-				LastServoPos = Servos[j].lastpos;	// which determines how long the post-high period is (255-this)
-			}			
+			// If the servo has been positioned,
+			if (Servos[j].ticksremaining != SERVO_NOPOS) {
 				
-			switch (Servos[j].port) {				// And set the pin high for this cycle
-				case 0: P0 |= (1 << Servos[j].pin); break;
-				case 1: P1 |= (1 << Servos[j].pin); break;
-				case 2: P2 |= (1 << Servos[j].pin); break;
+				// Find the largest position.  That'll be used to determine how long to go before
+				// counting whole milliseconds in the LOW state
+				if (Servos[j].ticksremaining > HighServoPos) { // This is the highest of all servo positions
+					HighServoPos = Servos[j].ticksremaining;   // which determines how long the post-high period is (255-this)
+				}			
+					
+				pinmask = 1 << Servos[j].pin;
+				switch (Servos[j].port) {				// And set the pin high for this cycle
+					case 0: P0 |= pinmask; break;
+					case 1: P1 |= pinmask; break;
+					case 2: P2 |= pinmask; break;
+				}
 			}
 		}
 		ServoTimerState=ALWAYSHIGH;
 		T3counter=0;
-		T3CC0 = 169; // 0.9ms
+		T3SET(169);		
 	}
 }
 
 void do_T3(void) {
+	LED_YELLOW(1);
 	switch(ServoTimerState) {
 		case ALWAYSHIGH:
 			T3_AlwaysHigh();
@@ -130,6 +142,7 @@ void do_T3(void) {
 			T3_AlwaysLow();
 			break;
 	}
+	LED_YELLOW(0);
 }
 
 
@@ -143,16 +156,17 @@ void InitServos(void) {
 	}
 
 	// Set up the servo timer
-	ServoTimerState = ALWAYSLOW;
-	T3counter = 16;
-	T3CC0=169; // 0.9ms
-	T3IE=1;
-    // DIV=   111: 1:128 prescaler
+	// DIV=   111: 1:128 prescaler
     // START=    1: Start the timer
     // OVFIM=     1: Enable the overflow interrupt.
-    //             0: 
+    // START=      0: Don't reset the timer right now
     // MODE=        10: Modulo
-	T3CTL = 0b11111010;		
+	T3CTL = 0b11111010;
+	
+	ServoTimerState = ALWAYSLOW;
+	T3counter = 16;
+	T3IE=1;
+	T3SET(169);		
 }
 
 void SetPin(uint8 servono, uint8 port, uint8 pin) {
