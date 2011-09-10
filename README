@@ -2,3 +2,21 @@ Wixel Servo control library
 Joe Moore
 (C) 2011
 
+This library is released under the GNU Lesser GPL version 3.0 by the 
+original author, Joe Moore.  Portions may be (C) by other parties, but 
+must be released under the same license.  As of tag v1.0, there are no 
+portions (C) other parties.
+
+The Full license text is in lgpl-3.0.txt and gpl-3.0.txt, which, in case of 
+conflict with this README, takes priority.
+
+Alternative licensing options for the original author's work are available.  
+Contact Wixel-Servo-Lib@iegrec.org for more information.
+
+USAGE:
+Define NUMSERVOS(n) outside of main() to instantiate support for n servos.
+Call InitServos() sometime early in main()
+Configure the connectivity with SetPin([0..n], port#, pin#)
+Set the servo position with SetPos([0..n], position)
+
+See jm2.c for an example.
