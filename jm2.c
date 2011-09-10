@@ -40,8 +40,7 @@ void main(void) {
 			dir ^=1;
 		}
 		SetPos(0,ServoPos);
-		SetPos(1,64);
-		SetPos(2,128);
-		LED_YELLOW(0);
+		SetPos(1,128);
+		SetPos(2,64);
 	}
 }
